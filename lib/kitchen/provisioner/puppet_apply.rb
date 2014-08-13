@@ -141,7 +141,7 @@ module Kitchen
         else
           case puppet_platform
           when "debian", "ubuntu"
-          info("Installing puppet on #{puppet_platform}")
+            info("Installing puppet on #{puppet_platform}")
           <<-INSTALL
           if [ ! $(which puppet) ]; then
             #{sudo('wget')} #{puppet_apt_repo}
@@ -151,8 +151,8 @@ module Kitchen
           fi
           #{install_busser}
           INSTALL
-                 when "redhat", "centos", "fedora"
-                  info("Installing puppet on #{puppet_platform}")
+          when "redhat", "centos", "fedora"
+            info("Installing puppet on #{puppet_platform}")
           <<-INSTALL
           if [ ! $(which puppet) ]; then
             #{sudo('rpm')} -ivh #{puppet_yum_repo}
@@ -160,6 +160,17 @@ module Kitchen
             #{sudo('yum')} -y install puppet#{puppet_redhat_version}
           fi
           #{install_busser}
+          INSTALL
+          when "windows"
+            info("Installing puppet on #{puppet_platform}")
+          <<-INSTALL
+            $webclient = New-Object System.Net.WebClient;  $webclient.DownloadFile('http://downloads.puppetlabs.com/windows/puppet-#{puppet_windows_version}.msi','puppet-#{puppet_windows_version}.msi')
+            msiexec /qn /i puppet-#{puppet_windows_version}.msi
+            Start-Sleep -s 60
+
+            cmd.exe /C "SET PATH=%PATH%;`"C:\\Program Files (x86)\\Puppet Labs\\Puppet\\bin`""
+
+            #{install_busser}
           INSTALL
          else
           info("Installing puppet, will try to determine platform os")
@@ -182,7 +193,27 @@ module Kitchen
         end
       end
 
+      def install_command_posh
+        install_command
+      end
+
+      def init_command_posh
+
+      end
+
       def install_busser
+        info("Install busser on #{puppet_platform}")
+        case puppet_platform
+        when 'windows'
+          #https://raw.githubusercontent.com/opscode/knife-windows/master/lib/chef/knife/bootstrap/windows-chef-client-msi.erb
+          <<-INSTALL
+           $webclient = New-Object System.Net.WebClient;  $webclient.DownloadFile('https://opscode-omnibus-packages.s3.amazonaws.com/windows/2008r2/x86_64/chef-windows-11.12.8-1.windows.msi','chef-windows-11.12.8-1.windows.msi')
+           msiexec /qn /i chef-windows-11.12.8-1.windows.msi
+
+           cmd.exe /C "SET PATH=%PATH%;`"C:\\opscode\\chef\\embedded\\bin`";`"C:\\tmp\\busser\\gems\\bin`""
+
+          INSTALL
+        else
           <<-INSTALL
           #{Util.shell_helpers}
           # install chef omnibus so that busser works as this is needed to run tests :(
@@ -196,7 +227,8 @@ module Kitchen
             #{sudo('sh')} /tmp/install.sh
           fi
           INSTALL
-          end
+        end
+      end
 
         def init_command
           dirs = %w{modules manifests files hiera hiera.yaml}.
@@ -271,7 +303,7 @@ module Kitchen
         end
 
         def run_command
-          [
+          arr = [
             custom_facts,
             sudo('puppet'),
             'apply',
@@ -281,8 +313,10 @@ module Kitchen
             "--fileserverconfig=#{File.join(config[:root_path], 'fileserver.conf')}",
             puppet_noop_flag,
             puppet_verbose_flag,
-            puppet_debug_flag,
+            puppet_debug_flag
           ].join(" ")
+          info(arr)
+          "start-job -scriptblock { cmd.exe /c \"#{arr.strip!}\" }"
         end
 
         protected
@@ -311,6 +345,9 @@ module Kitchen
         end
 
         def manifest
+          info("LBENNETT test")
+          info(config[:manifest])
+          info(diagnose)
           config[:manifest]
         end
 
@@ -348,6 +385,10 @@ module Kitchen
 
         def puppet_redhat_version
           config[:puppet_version] ? "-#{config[:puppet_version]}" : nil
+        end
+
+        def puppet_windows_version
+          config[:puppet_version] ? "#{config[:puppet_version]}" : nil
         end
 
         def puppet_noop_flag
@@ -447,7 +488,7 @@ module Kitchen
           if File.exists?(metadata_json)
             module_name = nil
             begin
-              module_name = JSON.parse(IO.read(metadata_json))['name'].split('/').last
+              module_name = JSON.parse(IO.read(metadata_json))['name'].split('-').last
             rescue
               error("not able to load or parse #{metadata_json_path} for the name of the module")
             end
