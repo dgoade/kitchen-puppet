@@ -255,7 +255,7 @@ module Kitchen
           #{install_busser}
           #{custom_install_command}
           INSTALL
-        when "windows"
+        when 'windows'
           info("Installing puppet on #{puppet_platform}")
           <<-INSTALL
           $webclient = New-Object System.Net.WebClient;  $webclient.DownloadFile('http://downloads.puppetlabs.com/windows/puppet-#{puppet_windows_version}.msi','puppet-#{puppet_windows_version}.msi')
@@ -300,21 +300,6 @@ module Kitchen
         end
       end
 
-      def install_busser
-        info("Install busser on #{puppet_platform}")
-        case puppet_platform
-        when 'windows'
-          #https://raw.githubusercontent.com/opscode/knife-windows/master/lib/chef/knife/bootstrap/windows-chef-client-msi.erb
-          <<-INSTALL
-           $webclient = New-Object System.Net.WebClient;  $webclient.DownloadFile('https://opscode-omnibus-packages.s3.amazonaws.com/windows/2008r2/x86_64/chef-windows-11.12.8-1.windows.msi','chef-windows-11.12.8-1.windows.msi')
-           msiexec /qn /i chef-windows-11.12.8-1.windows.msi
-
-           cmd.exe /C "SET PATH=%PATH%;`"C:\\opscode\\chef\\embedded\\bin`";`"C:\\tmp\\busser\\gems\\bin`""
-
-          INSTALL
-        else
-          <<-INSTALL
-=======
       def install_deep_merge
         return unless config[:hiera_deep_merge]
         <<-INSTALL
@@ -340,8 +325,9 @@ module Kitchen
 
       def install_busser
         return unless config[:require_chef_for_busser]
+        case puppet_platform
         when 'windows'
-          #https://raw.githubusercontent.com/opscode/knife-windows/master/lib/chef/knife/bootstrap/windows-chef-client-msi.erb
+          # https://raw.githubusercontent.com/opscode/knife-windows/master/lib/chef/knife/bootstrap/windows-chef-client-msi.erb
           <<-INSTALL
           $webclient = New-Object System.Net.WebClient;  $webclient.DownloadFile('https://opscode-omnibus-packages.s3.amazonaws.com/windows/2008r2/x86_64/chef-windows-11.12.8-1.windows.msi','chef-windows-11.12.8-1.windows.msi')
           msiexec /qn /i chef-windows-11.12.8-1.windows.msi
@@ -363,6 +349,7 @@ module Kitchen
             #{sudo('sh')} /tmp/install.sh
           fi
           INSTALL
+        end
       end
 
       def install_hiera
@@ -531,6 +518,27 @@ module Kitchen
           ].join(' ')
         end
 
+        if puppet_environment
+          commands << [
+            sudo('ln -s '), config[:root_path], File.join(puppet_dir, config[:puppet_environment])
+          ].join(' ')
+        end
+
+        if spec_files_path && spec_files_remote_path
+          commands << [
+            sudo('mkdir -p'), spec_files_remote_path
+          ].join(' ')
+          commands << [
+            sudo('cp -r'), File.join(config[:root_path], 'spec/*'), spec_files_remote_path
+          ].join(' ')
+        end
+
+        command = commands.join(' && ')
+        debug(command)
+        command
+      end
+      # rubocop:enable Metrics/CyclomaticComplexity, Metrics/PerceivedComplexity
+
       def run_command
         if !config[:puppet_apply_command].nil?
           return config[:puppet_apply_command]
@@ -623,9 +631,9 @@ module Kitchen
         config[:fileserver_config_path]
       end
 
-        def puppet_windows_version
-          config[:puppet_version] ? "#{config[:puppet_version]}" : nil
-        end
+      def puppet_windows_version
+        config[:puppet_version] ? "#{config[:puppet_version]}" : nil
+      end
 
       def hiera_data
         config[:hiera_data_path]
